@@ -4,11 +4,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-IMAGE="${AGENTBOX_IMAGE:-}"
-if [[ -z "${IMAGE}" && -f "${ROOT}/build.conf" ]]; then
-  IMAGE="$(awk -F= '/^IMAGE=/{print $2; exit}' "${ROOT}/build.conf" | tr -d '[:space:]')"
-fi
-IMAGE="${IMAGE:-wsams/agentbox:core}"
+# Runtime default is the published Hub tag. build.conf IMAGE is for local
+# build.sh output (often :dev) and must not override pulls/launches.
+IMAGE="${AGENTBOX_IMAGE:-wsams/agentbox:core}"
 
 PROFILE="sealed"          # sealed | filtered | trusted
 WORK_DIR=""
