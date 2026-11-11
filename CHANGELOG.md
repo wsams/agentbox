@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/wsams/safe-ai-container/compare/v1.1.0...v1.1.1) (2026-11-11)
+
+### Bug Fixes
+
+* **image:** update trivy, gitleaks, syft, and crane download URLs ([3d6ef26](https://github.com/wsams/safe-ai-container/commit/3d6ef2687df75c35381e08801527e5023bd48e67))
+
 ## [1.1.0](https://github.com/wsams/safe-ai-container/compare/v1.0.1...v1.1.0) (2026-11-11)
 
 ### Features
