@@ -10,7 +10,7 @@ DevOps toolbox containers with optional **runtime** AI agent installs. Prefer `.
 - Launcher is `./capsule`. Profiles: `sealed`, `filtered`, `trusted`.
 - Feature groups: `build.conf` / `flavors/*.conf` and `WITH_*` Dockerfile args. Install logic lives in `image/modules/`.
 - No Tanzu, vSphere, private LLM gateways, or preconfigured Helm repos.
-- Open skills in `skills.conf` install under `/home/agent/.cursor/skills/` (content, not agent binaries).
+- Open skills in `skills.conf` and local `skills/<name>/` install under `/home/agent/.cursor/skills/` (content, not agent binaries). Local example: `skills/audit-project` for CVE / secret / misconfig audits.
 - Conventional Commits for semantic-release on `main`.
 - Renovate nightly needs `RENOVATE_TOKEN` + auto-merge; release uses `GITHUB_TOKEN`.
 

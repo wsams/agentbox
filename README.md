@@ -89,7 +89,9 @@ Privilege knobs on sealed/filtered: `-D`, `--sudo`, `--ssh`, `-A`, `--history`, 
 
 ### Skills
 
-Open skill repos in `skills.conf` (default: [`wsams/agent-wizardry`](https://github.com/wsams/agent-wizardry)) are baked under `/home/agent/.cursor/skills/`. That is skill content, not a vendor agent binary.
+Open skill repos in `skills.conf` (default: [`wsams/agent-wizardry`](https://github.com/wsams/agent-wizardry)) and local folders under `skills/<name>/SKILL.md` (for example `skills/audit-project`) are baked under `/home/agent/.cursor/skills/`. That is skill content, not a vendor agent binary.
+
+`audit-project` is a generic audit skill (CVEs, secrets, misconfig, supply chain) usable by any agent that loads skills from that tree.
 
 ## Custom agents
 
