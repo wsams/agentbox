@@ -20,6 +20,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # full installs every feature group; layers + final image exceed the
+      # default runner free space unless we drop preinstalled toolchains first.
+      - name: Free runner disk space
+        if: matrix.flavor == 'full'
+        run: |
+          set -euo pipefail
+          echo "Before cleanup:"
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/.ghcup
+          sudo docker system prune -af || true
+          echo "After cleanup:"
+          df -h /
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
