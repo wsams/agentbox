@@ -40,18 +40,28 @@ Same modular `Dockerfile`; feature groups flip via `build.conf` / `flavors/*.con
 
 | Group | What you get |
 |---|---|
-| *(always)* | fish/bash/zsh, vim, git, gh, lazygit, Docker CLI + buildx, Python 3 + uv, Node.js LTS, jq/yq, ripgrep/fd/bat/fzf/delta, network basics, in-container `wizard` + agent installers, optional Cursor **skills** (e.g. agent-wizardry) |
+| *(always)* | fish/bash/zsh, vim, git, gh, lazygit, Docker CLI + buildx, Python 3 + uv, Node.js LTS, jq/yq, ripgrep/fd/bat/fzf/delta, network basics, in-container `wizard` + lazy wrappers, optional Cursor **skills** |
 | `network` | grpcurl |
 | `databases` | psql, mysql/mariadb client, redis-cli, sqlite3, mongosh |
 | `aws` / `gcp` / `azure` | Cloud CLIs |
-| `terraform` | terraform, tflint, terraform-docs |
+| `terraform` | terraform, tflint, terraform-docs (BSL — see [docs/LICENSES.md](docs/LICENSES.md)) |
 | `pulumi` | pulumi, crd2pulumi |
+| `ansible` | ansible, ansible-lint |
+| `secrets` | sops, age (Vault CLI is on-demand only) |
+| `gitops` | flux |
+| `supplychain` | cosign, skopeo, pack |
+| `local-k8s` | kind, k3d |
+| `mesh` | cilium, hubble, istioctl, linkerd |
+| `rclone` | rclone |
+| `golang` | Go toolchain |
 | `security` | trivy, gitleaks, syft |
 | `k8s` | kubectl, helm (no repos pre-added), k9s, stern, kubectx, kubens, helm-diff |
 | `k8s-extras` | kustomize, kubeconform, kube-linter, kubectl-neat |
 | `container-tools` | dive, crane |
 | `argocd` | argocd CLI |
 | `rust` | rustup / cargo |
+
+**On-demand only (wrappers / wizard):** AI agent CLIs; HashiCorp Vault CLI (BSL). See [docs/LICENSES.md](docs/LICENSES.md).
 
 ## Prerequisites
 

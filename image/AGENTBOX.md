@@ -1,35 +1,34 @@
 # agentbox
 
-You are inside an **agentbox** container. The workspace is `/work`.
+Workspace: `/work`. This image is a **devops toolbox**.
 
-This image is a **devops toolbox**. Proprietary AI agent binaries are not baked in.
+## Agents (on demand)
 
-## First-run wrappers
-
-Commands like `agent`, `claude`, `copilot`, `grok`, `gemini`, `codex`, and `opencode` are **wrappers**. The first time you run one, it downloads/installs that CLI into your home (`~/.local` or `~/.npm-global`), then execs it. Later runs use the installed binary (those dirs shadow `/usr/local/bin` on `PATH`).
+`agent`, `claude`, `copilot`, `grok`, `gemini`, `codex`, `opencode` are wrappers — first run installs into `~/.local` / `~/.npm-global`.
 
 ```bash
-agent                  # installs Cursor agent on first use, then runs it
-claude                 # same for Claude Code
-wizard                 # menu of all installers + status
-run-agent              # AGENT_CMD, otherwise agent
+agent
+wizard                 # menu: agents + OSS tool groups
 ```
 
-Disable auto-install:
+`AGENTBOX_NO_AUTO_INSTALL=1` disables first-run installs.
+
+## Tool groups (on demand)
+
+If your flavor omitted a group, install userland copies:
 
 ```bash
-export AGENTBOX_NO_AUTO_INSTALL=1
+wizard
+# or:
+/usr/local/lib/agentbox/installers/install-groups.sh ansible,secrets,rclone
 ```
 
-## Custom agents
+Groups: `ansible`, `secrets`, `gitops`, `supplychain`, `local-k8s`, `mesh`, `rclone`, `golang`, `vault`.
 
-```bash
-export AGENT_CMD=/path/to/your-agent
-run-agent
-```
+## Vault (BSL)
 
-Or launch the capsule with `--agent-cmd`.
+`vault` is a wrapper (not baked into Hub images). First run downloads under HashiCorp BSL terms.
 
-## Persistence
+## Licenses
 
-Installs under `/home/agent` last until the container is removed or recreated unless you bind-mount that home.
+See `/etc/agentbox/LICENSES.md` for what may be published vs on-demand only.

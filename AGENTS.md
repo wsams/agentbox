@@ -4,8 +4,9 @@ DevOps toolbox containers with optional **runtime** AI agent installs. Prefer `.
 
 ## Conventions
 
-- **Do not bake proprietary agent binaries** (Cursor, Claude Code, Copilot, Grok, …) into images pushed to Docker Hub. Ship lazy wrappers (`image/wrappers/`), installers (`image/installers/`), and the in-container wizard only.
-- First-run wrappers on `PATH` (`agent`, `claude`, …) call the matching installer when `~/.local` / `~/.npm-global` does not yet have the binary. `AGENTBOX_NO_AUTO_INSTALL=1` disables that.
+- **Do not bake proprietary agent binaries** (Cursor, Claude Code, Copilot, Grok, …) or non-OSI tools we choose to keep off Hub (Vault CLI) into published images. Ship lazy wrappers (`image/wrappers/`), installers (`image/installers/`), and the in-container wizard. See `docs/LICENSES.md`.
+- First-run wrappers on `PATH` (`agent`, `claude`, `vault`, …) call the matching installer when `~/.local` / `~/.npm-global` does not yet have the binary. `AGENTBOX_NO_AUTO_INSTALL=1` disables that.
+- New OSS devops groups (`ansible`, `secrets`, `gitops`, `supplychain`, `local-k8s`, `mesh`, `rclone`, `golang`) are bake-time feature flags and/or runtime `install-group-*.sh` / `install-groups.sh` wizard tasks.
 - Two wizards: host `./wizard.py` + `wizard/catalog.json`; in-container `wizard` + `image/wizard/catalog.json` (installed to `/usr/local/lib/agentbox`).
 - Custom agents use `AGENT_CMD` / `capsule --agent-cmd` / `run-agent`.
 - Launcher is `./capsule`. Profiles: `sealed`, `filtered`, `trusted`.

@@ -1,39 +1,159 @@
 {
   "version": 1,
   "project": {
-    "name": "agentbox agents",
-    "summary": "Install AI agent CLIs into this container at runtime. Nothing proprietary is baked into the published image.",
+    "name": "agentbox runtime",
+    "summary": "Install AI agents and optional OSS tool groups into this container. Proprietary and non-OSI CLIs are never baked into Hub images.",
     "docs": ["AGENTBOX.md"]
   },
   "briefing": [
     {
-      "title": "Lazy wrappers",
-      "body": "You can also just run agent, claude, copilot, grok, gemini, codex, or opencode — each wrapper installs on first use. This wizard is the explicit menu for the same installers."
+      "title": "Two ways to install",
+      "body": "Piecemeal: run agent/claude/… wrappers, or pick a single installer below. Groups: install ansible, secrets, gitops, mesh, and more in one shot (or comma-separated)."
     },
     {
-      "title": "Why not baked in?",
-      "body": "Vendor agent binaries are downloaded by you under each vendor's terms. The Hub image only ships wrappers, installers, and this wizard."
+      "title": "Licenses",
+      "body": "Open-source tools may be baked into flavors or installed here. Vault CLI is BSL — wrapper only. AI agents are vendor downloads under their terms. See /etc/agentbox/LICENSES.md."
     },
     {
       "title": "Persistence",
-      "body": "Installs land under the container user's home (~/.local, ~/.npm-global). They survive stop/start, but recreate or docker rm wipes them unless you volume-mount that home."
+      "body": "Userland installs go to ~/.local (and ~/.npm-global). They survive stop/start until the container is recreated unless you volume-mount home."
     }
   ],
   "tasks": [
     {
+      "id": "install-groups",
+      "title": "Install tool groups (batch)",
+      "summary": "Install one or more OSS groups at once (comma-separated), into ~/.local.",
+      "details": "Groups: ansible, secrets, gitops, supplychain, local-k8s, mesh, rclone, golang, vault",
+      "kind": "script",
+      "source": "installers/install-groups.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "groups",
+          "prompt": "Groups to install (comma-separated)",
+          "type": "string",
+          "positional": true,
+          "required": true,
+          "default": "ansible,secrets",
+          "help": "Example: ansible,secrets,gitops,rclone,golang"
+        }
+      ],
+      "run": { "argv": ["installers/install-groups.sh"] }
+    },
+    {
+      "id": "install-group-ansible",
+      "title": "Install Ansible group",
+      "summary": "ansible + ansible-lint via uv (GPL-3.0).",
+      "kind": "script",
+      "source": "installers/install-group-ansible.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-ansible.sh"] }
+    },
+    {
+      "id": "install-group-secrets",
+      "title": "Install secrets group (sops + age)",
+      "summary": "Open-source secret tooling. Vault is separate (BSL wrapper).",
+      "kind": "script",
+      "source": "installers/install-group-secrets.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-secrets.sh"] }
+    },
+    {
+      "id": "install-group-gitops",
+      "title": "Install GitOps group (flux)",
+      "summary": "Flux CD CLI (Apache-2.0). Argo CD is a build feature group.",
+      "kind": "script",
+      "source": "installers/install-group-gitops.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-gitops.sh"] }
+    },
+    {
+      "id": "install-group-supplychain",
+      "title": "Install supply-chain group",
+      "summary": "cosign + pack (Apache-2.0). skopeo needs apt if not already in the image.",
+      "kind": "script",
+      "source": "installers/install-group-supplychain.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-supplychain.sh"] }
+    },
+    {
+      "id": "install-group-local-k8s",
+      "title": "Install local Kubernetes group",
+      "summary": "kind + k3d (need Docker socket to create clusters).",
+      "kind": "script",
+      "source": "installers/install-group-local-k8s.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-local-k8s.sh"] }
+    },
+    {
+      "id": "install-group-mesh",
+      "title": "Install service-mesh group",
+      "summary": "cilium, hubble, istioctl, linkerd (Apache-2.0).",
+      "kind": "script",
+      "source": "installers/install-group-mesh.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-mesh.sh"] }
+    },
+    {
+      "id": "install-group-rclone",
+      "title": "Install rclone",
+      "summary": "rclone object-storage CLI (MIT).",
+      "kind": "script",
+      "source": "installers/install-group-rclone.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-rclone.sh"] }
+    },
+    {
+      "id": "install-group-golang",
+      "title": "Install Go toolchain",
+      "summary": "Go under ~/.local/go (BSD-style).",
+      "kind": "script",
+      "source": "installers/install-group-golang.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": { "argv": ["installers/install-group-golang.sh"] }
+    },
+    {
+      "id": "install-vault",
+      "title": "Install Vault CLI",
+      "summary": "HashiCorp Vault CLI (BSL) — on-demand only, not baked into Hub images.",
+      "kind": "script",
+      "source": "installers/install-vault.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "prerequisites": ["Agree to HashiCorp BSL terms for your use"],
+      "run": { "argv": ["installers/install-vault.sh"] }
+    },
+    {
       "id": "install-cursor",
       "title": "Install Cursor agent",
       "summary": "Fetch Cursor's official agent CLI into this container.",
-      "details": "Runs Cursor's install script. Requires network egress to cursor.com / downloads.cursor.com. After install: agent",
       "kind": "script",
       "source": "installers/install-cursor-agent.sh",
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
       "prerequisites": ["Outbound HTTPS", "Agree to Cursor Terms of Service"],
-      "run": {
-        "argv": ["installers/install-cursor-agent.sh"]
-      }
+      "run": { "argv": ["installers/install-cursor-agent.sh"] }
     },
     {
       "id": "install-claude",
@@ -44,10 +164,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "prerequisites": ["Outbound HTTPS to the npm registry", "Agree to Anthropic's Claude Code terms"],
-      "run": {
-        "argv": ["installers/install-claude-code.sh"]
-      }
+      "run": { "argv": ["installers/install-claude-code.sh"] }
     },
     {
       "id": "install-copilot",
@@ -58,9 +175,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/install-copilot-cli.sh"]
-      }
+      "run": { "argv": ["installers/install-copilot-cli.sh"] }
     },
     {
       "id": "install-grok",
@@ -71,9 +186,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/install-grok.sh"]
-      }
+      "run": { "argv": ["installers/install-grok.sh"] }
     },
     {
       "id": "install-gemini",
@@ -84,9 +197,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/install-gemini-cli.sh"]
-      }
+      "run": { "argv": ["installers/install-gemini-cli.sh"] }
     },
     {
       "id": "install-codex",
@@ -97,9 +208,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/install-codex.sh"]
-      }
+      "run": { "argv": ["installers/install-codex.sh"] }
     },
     {
       "id": "install-opencode",
@@ -110,9 +219,7 @@
       "danger": "writes",
       "confirm": true,
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/install-opencode.sh"]
-      }
+      "run": { "argv": ["installers/install-opencode.sh"] }
     },
     {
       "id": "list-agents",
@@ -122,9 +229,7 @@
       "source": "installers/list-agents.sh",
       "danger": "safe",
       "surface": ["cli"],
-      "run": {
-        "argv": ["installers/list-agents.sh"]
-      }
+      "run": { "argv": ["installers/list-agents.sh"] }
     },
     {
       "id": "manual-custom-agent",

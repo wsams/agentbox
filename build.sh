@@ -7,6 +7,7 @@ cd "${ROOT}"
 
 ALL_FEATURES=(
   network databases aws gcp azure terraform pulumi
+  ansible secrets gitops supplychain local-k8s mesh rclone golang
   security k8s k8s-extras container-tools argocd rust
 )
 

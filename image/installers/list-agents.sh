@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-candidates=(agent cursor-agent claude copilot grok gemini codex opencode)
+candidates=(agent cursor-agent claude copilot grok gemini codex opencode vault)
 
 echo "Agent CLIs:"
 echo "(wrappers in /usr/local/bin install on first run; real installs live under ~/.local or ~/.npm-global)"
