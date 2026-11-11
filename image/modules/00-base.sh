@@ -72,8 +72,31 @@ ln -sf "$(command -v batcat)" /usr/local/bin/bat
 locale-gen en_US.UTF-8
 update-locale LANG=en_US.UTF-8
 
-groupadd --gid 1000 agent
-useradd --uid 1000 --gid agent --shell /usr/bin/fish --create-home agent
+# ubuntu:24.04 ships with user/group ubuntu at uid/gid 1000 — reclaim for agent
+if getent passwd 1000 >/dev/null; then
+  existing_user="$(getent passwd 1000 | cut -d: -f1)"
+  if [[ "${existing_user}" != "agent" ]]; then
+    userdel -r "${existing_user}" 2>/dev/null || userdel "${existing_user}" || true
+  fi
+fi
+if getent group 1000 >/dev/null; then
+  existing_group="$(getent group 1000 | cut -d: -f1)"
+  if [[ "${existing_group}" != "agent" ]]; then
+    groupmod -n agent "${existing_group}"
+  fi
+else
+  groupadd --gid 1000 agent
+fi
+if getent passwd agent >/dev/null; then
+  usermod -u 1000 -g agent -s /usr/bin/fish -d /home/agent agent
+  # Ensure home exists if usermod did not move it
+  install -d -o agent -g agent /home/agent
+elif getent passwd 1000 >/dev/null; then
+  existing_user="$(getent passwd 1000 | cut -d: -f1)"
+  usermod -l agent -g agent -s /usr/bin/fish -d /home/agent -m "${existing_user}"
+else
+  useradd --uid 1000 --gid agent --shell /usr/bin/fish --create-home agent
+fi
 echo 'agent ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/agent
 chmod 0440 /etc/sudoers.d/agent
 
