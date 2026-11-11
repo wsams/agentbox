@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/wsams/safe-ai-container/compare/v1.0.0...v1.0.1) (2026-11-11)
+
+### Bug Fixes
+
+* **image:** reclaim uid 1000 from ubuntu base for agent user ([a1e266c](https://github.com/wsams/safe-ai-container/commit/a1e266cf67b503f0d76fc133cff30b080255089b))
+
 ## 1.0.0 (2026-11-11)
 
 ### Features
