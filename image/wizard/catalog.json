@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "project": {
+    "name": "agentbox agents",
+    "summary": "Install AI agent CLIs into this container at runtime. Nothing proprietary is baked into the published image.",
+    "docs": ["AGENTBOX.md"]
+  },
+  "briefing": [
+    {
+      "title": "Why install here?",
+      "body": "Vendor agent binaries (Cursor, Claude Code, Copilot, Grok, and others) are downloaded by you under each vendor's terms. The Hub image only ships the installers and this wizard."
+    },
+    {
+      "title": "Persistence",
+      "body": "Installs land under the container user's home (~/.local, ~/.npm-global). They survive stop/start, but recreate or docker rm wipes them unless you volume-mount that home."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "install-cursor",
+      "title": "Install Cursor agent",
+      "summary": "Fetch Cursor's official agent CLI into this container.",
+      "details": "Runs Cursor's install script. Requires network egress to cursor.com / downloads.cursor.com. After install: agent",
+      "kind": "script",
+      "source": "installers/install-cursor-agent.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "prerequisites": ["Outbound HTTPS", "Agree to Cursor Terms of Service"],
+      "run": {
+        "argv": ["installers/install-cursor-agent.sh"]
+      }
+    },
+    {
+      "id": "install-claude",
+      "title": "Install Claude Code",
+      "summary": "Install Anthropic's Claude Code CLI via npm.",
+      "kind": "script",
+      "source": "installers/install-claude-code.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "prerequisites": ["Outbound HTTPS to the npm registry", "Agree to Anthropic's Claude Code terms"],
+      "run": {
+        "argv": ["installers/install-claude-code.sh"]
+      }
+    },
+    {
+      "id": "install-copilot",
+      "title": "Install GitHub Copilot CLI",
+      "summary": "Install @github/copilot via npm.",
+      "kind": "script",
+      "source": "installers/install-copilot-cli.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/install-copilot-cli.sh"]
+      }
+    },
+    {
+      "id": "install-grok",
+      "title": "Install Grok CLI",
+      "summary": "Install xAI's Grok CLI via npm.",
+      "kind": "script",
+      "source": "installers/install-grok.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/install-grok.sh"]
+      }
+    },
+    {
+      "id": "install-gemini",
+      "title": "Install Gemini CLI",
+      "summary": "Install Google's Gemini CLI via npm.",
+      "kind": "script",
+      "source": "installers/install-gemini-cli.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/install-gemini-cli.sh"]
+      }
+    },
+    {
+      "id": "install-codex",
+      "title": "Install OpenAI Codex CLI",
+      "summary": "Install @openai/codex via npm.",
+      "kind": "script",
+      "source": "installers/install-codex.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/install-codex.sh"]
+      }
+    },
+    {
+      "id": "install-opencode",
+      "title": "Install OpenCode",
+      "summary": "Install the open-source OpenCode CLI via npm.",
+      "kind": "script",
+      "source": "installers/install-opencode.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/install-opencode.sh"]
+      }
+    },
+    {
+      "id": "list-agents",
+      "title": "Show installed agent CLIs",
+      "summary": "Print which known agent binaries are on PATH.",
+      "kind": "script",
+      "source": "installers/list-agents.sh",
+      "danger": "safe",
+      "surface": ["cli"],
+      "run": {
+        "argv": ["installers/list-agents.sh"]
+      }
+    },
+    {
+      "id": "manual-custom-agent",
+      "title": "Use a custom agent binary",
+      "summary": "Point AGENT_CMD at any CLI you mount or copy into the container.",
+      "kind": "manual",
+      "source": "AGENTBOX.md",
+      "danger": "safe",
+      "surface": ["cli"],
+      "steps": [
+        "Copy or mount your agent binary into the container (for example under /home/agent/.local/bin)",
+        "export AGENT_CMD=/path/to/your-agent   (or relaunch the capsule with --agent-cmd)",
+        "run-agent   # uses AGENT_CMD when set"
+      ]
+    }
+  ]
+}

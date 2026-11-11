@@ -1,0 +1,9 @@
+skills/repos/
+skills/build/*
+!skills/build/.gitkeep
+*.zip
+.env
+.env.*
+!.env.example
+.DS_Store
+*.octoshift.log

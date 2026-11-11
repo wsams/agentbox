@@ -1,0 +1,307 @@
+{
+  "version": 1,
+  "project": {
+    "name": "agentbox",
+    "summary": "Build and launch modular devops toolbox containers. Install AI agents inside the container with the in-container wizard.",
+    "docs": ["README.md", "AGENTS.md"]
+  },
+  "briefing": [
+    {
+      "title": "What this is",
+      "body": "agentbox builds flavor-tagged images (core, k8s, terraform, pulumi, full) and launches them with capsule. The default profile is sealed isolation; opt into mounts or use filtered/trusted when you need more."
+    },
+    {
+      "title": "Two wizards",
+      "body": "This host wizard builds and runs capsules. After you are inside a container, run wizard to install Cursor, Claude Code, Copilot, Grok, and other agent CLIs (downloaded at runtime, not baked into Hub images)."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "capsule-sealed",
+      "title": "Start a sealed session",
+      "summary": "Mount a work directory at /work with git identity and open network. No Docker socket, SSH, history, or GitHub tokens unless you add flags.",
+      "details": "Creates or reattaches a container named after the directory. Use --recreate when changing profile or mounts.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "prerequisites": ["Docker daemon running", "Image available locally or pullable"],
+      "inputs": [
+        {
+          "name": "work_dir",
+          "prompt": "Work directory to mount at /work",
+          "type": "path",
+          "positional": true,
+          "required": true,
+          "default": "."
+        },
+        {
+          "name": "--pull",
+          "prompt": "Pull the image before starting?",
+          "type": "confirm",
+          "default": false
+        },
+        {
+          "name": "-D",
+          "prompt": "Mount the host Docker socket?",
+          "type": "confirm",
+          "default": false,
+          "help": "Gives the container root-equivalent control of the host daemon."
+        },
+        {
+          "name": "--ssh",
+          "prompt": "Mount ~/.ssh read-only?",
+          "type": "confirm",
+          "default": false
+        },
+        {
+          "name": "--history",
+          "prompt": "Share shell history with the host?",
+          "type": "confirm",
+          "default": false
+        },
+        {
+          "name": "-G",
+          "prompt": "Forward GitHub tokens (GH_TOKEN / GITHUB_TOKEN)?",
+          "type": "confirm",
+          "default": false
+        },
+        {
+          "name": "--sudo",
+          "prompt": "Keep sudo inside the container?",
+          "type": "confirm",
+          "default": false
+        }
+      ],
+      "run": { "argv": ["./capsule"] }
+    },
+    {
+      "id": "capsule-filtered",
+      "title": "Start a filtered session",
+      "summary": "No credentials; HTTP(S) only through the egress allowlist proxy.",
+      "details": "Uses wsams/agentbox-proxy (built from proxy/) and egress.conf. Add domains with --allow.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "work_dir",
+          "prompt": "Work directory to mount at /work",
+          "type": "path",
+          "positional": true,
+          "required": true,
+          "default": "."
+        },
+        {
+          "name": "--allow",
+          "prompt": "Extra allowlisted domain (optional, empty to skip)",
+          "type": "string"
+        }
+      ],
+      "run": { "argv": ["./capsule", "--filtered"] }
+    },
+    {
+      "id": "capsule-trusted",
+      "title": "Start a trusted session",
+      "summary": "Full conveniences: Docker socket, SSH, history, GitHub tokens, sudo.",
+      "details": "The container is no longer a security boundary relative to the host Docker daemon.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "destructive",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "work_dir",
+          "prompt": "Work directory to mount at /work",
+          "type": "path",
+          "positional": true,
+          "required": true,
+          "default": "."
+        }
+      ],
+      "run": { "argv": ["./capsule", "--trusted"] }
+    },
+    {
+      "id": "capsule-agent",
+      "title": "Run run-agent in a capsule",
+      "summary": "Ensure a container exists for the directory, then exec run-agent (AGENT_CMD or first installed agent).",
+      "details": "If no agent is installed yet, attach and run wizard inside the container first.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "work_dir",
+          "prompt": "Work directory",
+          "type": "path",
+          "positional": true,
+          "required": true,
+          "default": "."
+        },
+        {
+          "name": "--agent-cmd",
+          "prompt": "Custom agent command (empty = run-agent default)",
+          "type": "string"
+        }
+      ],
+      "run": { "argv": ["./capsule", "agent"] }
+    },
+    {
+      "id": "capsule-attach",
+      "title": "Attach to a running capsule",
+      "summary": "Open an interactive shell in an existing container.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "safe",
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "name",
+          "prompt": "Container name",
+          "type": "string",
+          "positional": true,
+          "required": true
+        }
+      ],
+      "run": { "argv": ["./capsule", "attach"] }
+    },
+    {
+      "id": "capsule-down",
+      "title": "Tear down a capsule",
+      "summary": "Remove the container plus its egress proxy, BuildKit builder, and network.",
+      "kind": "script",
+      "source": "capsule",
+      "danger": "destructive",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "name",
+          "prompt": "Container name",
+          "type": "string",
+          "positional": true,
+          "required": true
+        }
+      ],
+      "run": { "argv": ["./capsule", "down"] }
+    },
+    {
+      "id": "build-flavor",
+      "title": "Build an image flavor",
+      "summary": "Build one of the published presets: core, k8s, terraform, pulumi, or full.",
+      "kind": "script",
+      "source": "build.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "--flavor",
+          "prompt": "Which flavor?",
+          "type": "select",
+          "required": true,
+          "default": "core",
+          "choices": [
+            { "value": "core", "label": "core", "help": "Lean daily driver" },
+            { "value": "k8s", "label": "k8s", "help": "Core + Kubernetes tools" },
+            { "value": "terraform", "label": "terraform", "help": "Core + Terraform toolchain" },
+            { "value": "pulumi", "label": "pulumi", "help": "Core + Pulumi" },
+            { "value": "full", "label": "full", "help": "Every feature group" }
+          ]
+        },
+        {
+          "name": "--push",
+          "prompt": "Push to Docker Hub after build?",
+          "type": "confirm",
+          "default": false
+        }
+      ],
+      "run": { "argv": ["./build.sh"] }
+    },
+    {
+      "id": "build-custom",
+      "title": "Build with custom feature groups",
+      "summary": "Turn feature groups off/on for a one-off or variant tag.",
+      "kind": "script",
+      "source": "build.sh",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "inputs": [
+        {
+          "name": "--without",
+          "prompt": "Groups to disable (comma-separated, or all)",
+          "type": "string"
+        },
+        {
+          "name": "--with",
+          "prompt": "Groups to force on after WITHOUT",
+          "type": "string"
+        },
+        {
+          "name": "--variant",
+          "prompt": "Optional tag suffix",
+          "type": "string"
+        }
+      ],
+      "run": { "argv": ["./build.sh"] }
+    },
+    {
+      "id": "list-features",
+      "title": "List feature groups",
+      "summary": "Print every toggleable image feature group.",
+      "kind": "script",
+      "source": "build.sh",
+      "danger": "safe",
+      "surface": ["cli"],
+      "run": { "argv": ["./build.sh", "--list-features"] }
+    },
+    {
+      "id": "build-proxy",
+      "title": "Build the egress proxy image",
+      "summary": "Build wsams/agentbox-proxy for the filtered profile.",
+      "kind": "script",
+      "source": "proxy/Dockerfile",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "run": {
+        "argv": ["docker", "build", "-t", "wsams/agentbox-proxy:latest", "proxy"]
+      }
+    },
+    {
+      "id": "manual-incontainer-agents",
+      "title": "Install AI agents inside a capsule",
+      "summary": "Use the in-container wizard to download Cursor, Claude, Copilot, Grok, and others.",
+      "kind": "manual",
+      "source": "README.md#two-wizards",
+      "danger": "safe",
+      "surface": ["cli"],
+      "steps": [
+        "Start a capsule: ./capsule ~/your/project",
+        "Inside the container run: wizard",
+        "Pick an agent installer (or wizard --list). Each download is subject to that vendor's terms.",
+        "Then run the agent CLI, or: run-agent"
+      ]
+    },
+    {
+      "id": "renovate-dispatch",
+      "title": "Run Renovate now",
+      "summary": "Trigger the Renovate workflow outside the nightly schedule.",
+      "details": "Requires RENOVATE_TOKEN on the repo and gh authenticated to that repository.",
+      "kind": "workflow",
+      "source": ".github/workflows/renovate.yml",
+      "danger": "writes",
+      "confirm": true,
+      "surface": ["cli"],
+      "prerequisites": ["gh authenticated", "RENOVATE_TOKEN secret configured"],
+      "run": { "argv": ["gh", "workflow", "run", "renovate.yml"] }
+    }
+  ]
+}

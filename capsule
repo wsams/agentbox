@@ -1,0 +1,442 @@
+#!/usr/bin/env bash
+# capsule — start, attach, or tear down an agentbox container for a work directory.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+IMAGE="${AGENTBOX_IMAGE:-}"
+if [[ -z "${IMAGE}" && -f "${ROOT}/build.conf" ]]; then
+  IMAGE="$(awk -F= '/^IMAGE=/{print $2; exit}' "${ROOT}/build.conf" | tr -d '[:space:]')"
+fi
+IMAGE="${IMAGE:-wsams/agentbox:core}"
+
+PROFILE="sealed"          # sealed | filtered | trusted
+WORK_DIR=""
+NAME=""
+SHELL_NAME="fish"
+DETACH=0
+RECREATE=0
+PULL=0
+DOCKER_SOCK=0
+SUDO=0
+MOUNT_SSH=0
+SSH_AGENT_FWD=0
+MOUNT_HISTORY=0
+FORWARD_GIT=1
+FORWARD_GITHUB=0
+MOUNT_CURSOR_AUTH=0
+KUBECONFIG_HOST=""
+LOCAL_KUBECONFIG=""
+EGRESS_MODE=""            # open | proxy | none (profile defaults apply)
+EGRESS_CONFIG="${ROOT}/egress.conf"
+ALLOW_DOMAINS=()
+NO_BUILDER=0
+ENV_PASSTHRU=()
+UPDATE_CHECK="${AGENTBOX_UPDATE_CHECK:-1}"
+CUSTOM_AGENT_CMD=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  capsule [OPTIONS] [WORK_DIR]
+  capsule attach [NAME]
+  capsule down [NAME]
+  capsule agent [OPTIONS] [WORK_DIR] -- [agent args...]
+
+Profiles (isolation ladders):
+
+  sealed     Default. Mount WORK_DIR at /work, forward git identity, open
+             network, private BuildKit builder. No Docker socket, shell
+             history, SSH keys, or GitHub tokens unless you opt in.
+  filtered   No credentials. Network limited to egress.conf via a proxy
+             sidecar. Never reaches the host LAN unless allowlisted.
+  trusted    Privileged conveniences: Docker socket, history, SSH, GitHub
+             tokens when present, sudo.
+
+Common options:
+  --filtered / --trusted     Select profile (default sealed)
+  -n NAME                    Container name (default: basename of WORK_DIR)
+  -S SHELL                   fish|bash|zsh (default fish)
+  -d                         Detached
+  --recreate                 Replace an existing container
+  --pull                     docker pull IMAGE first
+  -D, --docker               Mount host Docker socket
+  --sudo                     Keep sudo inside the container
+  -s, --ssh                  Mount ~/.ssh read-only
+  -A                         Forward SSH_AUTH_SOCK
+  --history                  Mount fish/bash/zsh history files
+  -G, --github               Forward GH_TOKEN / GITHUB_TOKEN
+  --cursor-auth              Mount host ~/.cursor auth material (opt-in)
+  -k PATH                    Mount kubeconfig
+  -L PATH                    Loopback kubeconfig rewrite for Desktop/kind
+  --egress=MODE              open|proxy|none
+  --allow DOMAIN             Extra allowlist entry (repeatable)
+  --egress-config FILE       Allowlist file
+  --no-builder               Skip BuildKit sidecar
+  --agent-cmd CMD            Set AGENT_CMD inside the container (custom agent)
+  -e KEY=VAL                 Extra environment
+  --image IMAGE              Override image (or set AGENTBOX_IMAGE)
+  -h, --help                 Help
+
+Environment:
+  AGENTBOX_IMAGE, AGENTBOX_UPDATE_CHECK, WORK_DIR, CURSOR_API_KEY,
+  GH_TOKEN, GITHUB_TOKEN, SSH_AUTH_SOCK, AGENT_CMD
+EOF
+}
+
+die() { echo "error: $*" >&2; exit 1; }
+log() { echo "▶ $*" >&2; }
+
+abs_path() {
+  local p="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$p"
+  else
+    python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$p"
+  fi
+}
+
+default_name_for() {
+  basename "$(abs_path "$1")" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
+}
+
+parse_args() {
+  local positional=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --filtered) PROFILE=filtered; shift ;;
+      --trusted) PROFILE=trusted; shift ;;
+      --sealed) PROFILE=sealed; shift ;;
+      -n) NAME="$2"; shift 2 ;;
+      -S) SHELL_NAME="$2"; shift 2 ;;
+      -d) DETACH=1; shift ;;
+      --recreate) RECREATE=1; shift ;;
+      --pull) PULL=1; shift ;;
+      -D|--docker) DOCKER_SOCK=1; shift ;;
+      --sudo) SUDO=1; shift ;;
+      -s|--ssh) MOUNT_SSH=1; shift ;;
+      -A) SSH_AGENT_FWD=1; shift ;;
+      --history) MOUNT_HISTORY=1; shift ;;
+      -G|--github) FORWARD_GITHUB=1; shift ;;
+      --no-github) FORWARD_GITHUB=0; shift ;;
+      --cursor-auth) MOUNT_CURSOR_AUTH=1; shift ;;
+      -g|--git) FORWARD_GIT=1; shift ;;
+      --no-git) FORWARD_GIT=0; shift ;;
+      -k) KUBECONFIG_HOST="$2"; shift 2 ;;
+      -L) LOCAL_KUBECONFIG="$2"; shift 2 ;;
+      --egress=*) EGRESS_MODE="${1#*=}"; shift ;;
+      --egress) EGRESS_MODE="$2"; shift 2 ;;
+      --allow) ALLOW_DOMAINS+=("$2"); shift 2 ;;
+      --egress-config) EGRESS_CONFIG="$2"; shift 2 ;;
+      --no-builder) NO_BUILDER=1; shift ;;
+      --agent-cmd) CUSTOM_AGENT_CMD="$2"; shift 2 ;;
+      -e) ENV_PASSTHRU+=("$2"); shift 2 ;;
+      --image) IMAGE="$2"; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      --) shift; break ;;
+      -*) die "unknown option: $1" ;;
+      *) positional+=("$1"); shift ;;
+    esac
+  done
+  EXTRA_AGENT_ARGS=("$@")
+  if [[ ${#positional[@]} -gt 0 ]]; then
+    WORK_DIR="${positional[0]}"
+  fi
+}
+
+apply_profile_defaults() {
+  case "${PROFILE}" in
+    sealed)
+      EGRESS_MODE="${EGRESS_MODE:-open}"
+      ;;
+    filtered)
+      EGRESS_MODE="${EGRESS_MODE:-proxy}"
+      FORWARD_GIT=0
+      FORWARD_GITHUB=0
+      MOUNT_CURSOR_AUTH=0
+      MOUNT_HISTORY=0
+      MOUNT_SSH=0
+      DOCKER_SOCK=0
+      SUDO=0
+      ;;
+    trusted)
+      EGRESS_MODE="${EGRESS_MODE:-open}"
+      DOCKER_SOCK=1
+      SUDO=1
+      MOUNT_HISTORY=1
+      MOUNT_SSH=1
+      FORWARD_GITHUB=1
+      FORWARD_GIT=1
+      ;;
+    *) die "unknown profile: ${PROFILE}" ;;
+  esac
+}
+
+maybe_update_check() {
+  [[ "${UPDATE_CHECK}" == "1" ]] || return 0
+  command -v docker >/dev/null 2>&1 || return 0
+  local local_created remote_created
+  local_created="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.created"}}' "${IMAGE}" 2>/dev/null || true)"
+  remote_created="$(timeout 5 docker buildx imagetools inspect "${IMAGE}" --format '{{ json .Image }}' 2>/dev/null \
+    | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("config") or {}).get("Labels",{}).get("org.opencontainers.image.created",""))' 2>/dev/null || true)"
+  if [[ -n "${local_created}" ]]; then
+    log "Image     : built ${local_created} (local)"
+  fi
+  if [[ -n "${remote_created}" && -n "${local_created}" && "${remote_created}" > "${local_created}" ]]; then
+    echo "Warning: newer ${IMAGE} is in the registry (${remote_created}). Update with: capsule --pull --recreate" >&2
+  fi
+}
+
+ensure_network() {
+  local net="agentbox-${NAME}"
+  docker network inspect "${net}" >/dev/null 2>&1 || docker network create "${net}" >/dev/null
+  echo "${net}"
+}
+
+start_egress_proxy() {
+  local net="$1"
+  local proxy_name="${NAME}-egress"
+  docker rm -f "${proxy_name}" >/dev/null 2>&1 || true
+  local allow_file
+  allow_file="$(mktemp)"
+  cat "${EGRESS_CONFIG}" >"${allow_file}"
+  local d
+  if ((${#ALLOW_DOMAINS[@]})); then
+    for d in "${ALLOW_DOMAINS[@]}"; do
+      [[ -n "${d}" ]] && echo "${d}" >>"${allow_file}"
+    done
+  fi
+  # Tinyproxy-based allowlist proxy image built alongside agentbox, or fall back
+  local proxy_image="${AGENTBOX_PROXY_IMAGE:-wsams/agentbox-proxy:latest}"
+  if ! docker image inspect "${proxy_image}" >/dev/null 2>&1; then
+    if [[ -f "${ROOT}/proxy/Dockerfile" ]]; then
+      docker build -t "${proxy_image}" "${ROOT}/proxy" >/dev/null
+    else
+      die "filtered profile needs ${proxy_image}; build proxy/ first"
+    fi
+  fi
+  docker run -d --name "${proxy_name}" --network "${net}" \
+    -v "${allow_file}:/etc/egress.allow:ro" \
+    --restart unless-stopped \
+    "${proxy_image}" >/dev/null
+  echo "${proxy_name}"
+}
+
+start_builder() {
+  local builder="agentbox-${NAME}-builder"
+  if docker buildx inspect "${builder}" >/dev/null 2>&1; then
+    echo "${builder}"
+    return 0
+  fi
+  docker buildx create --name "${builder}" --driver docker-container \
+    --buildkitd-flags '--allow-insecure-entitlement network.host' >/dev/null
+  echo "${builder}"
+}
+
+cmd_down() {
+  local n="${1:-${NAME}}"
+  [[ -n "${n}" ]] || die "container name required"
+  docker rm -f "${n}" >/dev/null 2>&1 || true
+  docker rm -f "${n}-egress" >/dev/null 2>&1 || true
+  docker buildx rm "agentbox-${n}-builder" >/dev/null 2>&1 || true
+  docker network rm "agentbox-${n}" >/dev/null 2>&1 || true
+  log "Removed ${n} and sidecars"
+}
+
+cmd_attach() {
+  local n="${1:-${NAME}}"
+  [[ -n "${n}" ]] || die "container name required"
+  docker exec -it "${n}" "${SHELL_NAME}" -l
+}
+
+build_run_args() {
+  RUN_ARGS=(
+    --name "${NAME}"
+    --label "agentbox.profile=${PROFILE}"
+    --label "agentbox.work=${WORK_DIR}"
+    -v "${WORK_DIR}:/work"
+    -w /work
+    -e "AGENTBOX_PROFILE=${PROFILE}"
+  )
+
+  if [[ "${SUDO}" -eq 1 ]]; then
+    RUN_ARGS+=(-e AGENTBOX_SUDO=1)
+  else
+    RUN_ARGS+=(--cap-drop ALL --security-opt no-new-privileges)
+    RUN_ARGS+=(--cap-add NET_BIND_SERVICE --cap-add NET_RAW --cap-add CHOWN --cap-add SETUID --cap-add SETGID)
+  fi
+
+  if [[ "${FORWARD_GIT}" -eq 1 ]]; then
+    local gn ge
+    gn="$(git config --global user.name 2>/dev/null || true)"
+    ge="$(git config --global user.email 2>/dev/null || true)"
+    [[ -n "${gn}" ]] && RUN_ARGS+=(-e "GIT_USER_NAME=${gn}")
+    [[ -n "${ge}" ]] && RUN_ARGS+=(-e "GIT_USER_EMAIL=${ge}")
+  fi
+
+  if [[ "${FORWARD_GITHUB}" -eq 1 ]]; then
+    [[ -n "${GH_TOKEN:-}" ]] && RUN_ARGS+=(-e "GH_TOKEN=${GH_TOKEN}")
+    [[ -n "${GITHUB_TOKEN:-}" ]] && RUN_ARGS+=(-e "GITHUB_TOKEN=${GITHUB_TOKEN}")
+  fi
+
+  [[ -n "${CURSOR_API_KEY:-}" ]] && RUN_ARGS+=(-e "CURSOR_API_KEY=${CURSOR_API_KEY}")
+  [[ -n "${CUSTOM_AGENT_CMD}" ]] && RUN_ARGS+=(-e "AGENT_CMD=${CUSTOM_AGENT_CMD}")
+  [[ -n "${AGENT_CMD:-}" && -z "${CUSTOM_AGENT_CMD}" ]] && RUN_ARGS+=(-e "AGENT_CMD=${AGENT_CMD}")
+
+  local kv
+  if ((${#ENV_PASSTHRU[@]})); then
+    for kv in "${ENV_PASSTHRU[@]}"; do
+      [[ -n "${kv}" ]] && RUN_ARGS+=(-e "${kv}")
+    done
+  fi
+
+  if [[ "${MOUNT_SSH}" -eq 1 && -d "${HOME}/.ssh" ]]; then
+    RUN_ARGS+=(-v "${HOME}/.ssh:/home/agent/.ssh:ro")
+  fi
+  if [[ "${SSH_AGENT_FWD}" -eq 1 && -n "${SSH_AUTH_SOCK:-}" ]]; then
+    RUN_ARGS+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
+  fi
+  if [[ "${MOUNT_HISTORY}" -eq 1 ]]; then
+    [[ -f "${HOME}/.bash_history" ]] && RUN_ARGS+=(-v "${HOME}/.bash_history:/home/agent/.bash_history")
+    [[ -f "${HOME}/.zsh_history" ]] && RUN_ARGS+=(-v "${HOME}/.zsh_history:/home/agent/.zsh_history")
+    local fish_hist="${HOME}/.local/share/fish/fish_history"
+    if [[ -f "${fish_hist}" ]]; then
+      mkdir -p /tmp/agentbox-fish-hist-placeholder
+      RUN_ARGS+=(-v "${fish_hist}:/home/agent/.local/share/fish/fish_history")
+    fi
+  fi
+  if [[ "${MOUNT_CURSOR_AUTH}" -eq 1 && -d "${HOME}/.cursor" ]]; then
+    # Narrow mount: prefer auth/cli state, not the whole tree of IDE binaries
+    [[ -f "${HOME}/.cursor/argv.json" ]] && RUN_ARGS+=(-v "${HOME}/.cursor/argv.json:/home/agent/.cursor/argv.json")
+    [[ -d "${HOME}/.cursor/ai-tracking" ]] && RUN_ARGS+=(-v "${HOME}/.cursor/ai-tracking:/home/agent/.cursor/ai-tracking")
+  fi
+  if [[ "${DOCKER_SOCK}" -eq 1 ]]; then
+    if [[ -S /var/run/docker.sock ]]; then
+      RUN_ARGS+=(-v /var/run/docker.sock:/var/run/docker.sock)
+      log "Warning: host Docker socket mounted — container can control the host daemon"
+    else
+      die "Docker socket not found at /var/run/docker.sock"
+    fi
+  fi
+  if [[ -n "${KUBECONFIG_HOST}" ]]; then
+    local kc
+    kc="$(abs_path "${KUBECONFIG_HOST}")"
+    RUN_ARGS+=(-v "${kc}:/home/agent/.kube/config" -e KUBECONFIG=/home/agent/.kube/config)
+  fi
+  if [[ -n "${LOCAL_KUBECONFIG}" ]]; then
+    local lkc rewritten
+    lkc="$(abs_path "${LOCAL_KUBECONFIG}")"
+    rewritten="$(mktemp)"
+    # Rewrite localhost/127.0.0.1 to host-gateway name
+    sed -e 's#https://127.0.0.1#https://host.docker.internal#g' \
+        -e 's#https://localhost#https://host.docker.internal#g' \
+        "${lkc}" >"${rewritten}"
+    RUN_ARGS+=(-v "${rewritten}:/home/agent/.kube/config:ro" -e KUBECONFIG=/home/agent/.kube/config)
+    RUN_ARGS+=(--add-host=host.docker.internal:host-gateway)
+  fi
+}
+
+cmd_start() {
+  WORK_DIR="${WORK_DIR:-${WORK_DIR_ENV:-${PWD}}}"
+  WORK_DIR="$(abs_path "${WORK_DIR}")"
+  [[ -d "${WORK_DIR}" ]] || die "work directory not found: ${WORK_DIR}"
+  NAME="${NAME:-$(default_name_for "${WORK_DIR}")}"
+
+  apply_profile_defaults
+  maybe_update_check
+
+  if [[ "${PULL}" -eq 1 ]]; then
+    docker pull "${IMAGE}"
+  fi
+
+  if docker inspect "${NAME}" >/dev/null 2>&1; then
+    local existing_profile
+    existing_profile="$(docker inspect --format '{{index .Config.Labels "agentbox.profile"}}' "${NAME}" 2>/dev/null || true)"
+    if [[ "${RECREATE}" -eq 1 ]]; then
+      cmd_down "${NAME}"
+    else
+      if [[ -n "${existing_profile}" && "${existing_profile}" != "${PROFILE}" ]]; then
+        echo "Warning: container '${NAME}' has profile '${existing_profile}'; requested '${PROFILE}'. Reattaching. Use --recreate to switch." >&2
+      fi
+      log "Reattaching to ${NAME}"
+      if [[ "${DETACH}" -eq 1 ]]; then
+        docker start "${NAME}" >/dev/null
+        echo "${NAME}"
+        return 0
+      fi
+      docker start -ai "${NAME}" 2>/dev/null || docker exec -it "${NAME}" "${SHELL_NAME}" -l
+      return 0
+    fi
+  fi
+
+  local net=""
+  net="$(ensure_network)"
+  build_run_args
+  RUN_ARGS+=(--network "${net}")
+
+  if [[ "${EGRESS_MODE}" == "proxy" ]]; then
+    start_egress_proxy "${net}" >/dev/null
+    RUN_ARGS+=(-e http_proxy="http://${NAME}-egress:8888")
+    RUN_ARGS+=(-e https_proxy="http://${NAME}-egress:8888")
+    RUN_ARGS+=(-e HTTP_PROXY="http://${NAME}-egress:8888")
+    RUN_ARGS+=(-e HTTPS_PROXY="http://${NAME}-egress:8888")
+    RUN_ARGS+=(-e NO_PROXY="localhost,127.0.0.1")
+  elif [[ "${EGRESS_MODE}" == "none" ]]; then
+    RUN_ARGS+=(--network none)
+  fi
+
+  if [[ "${NO_BUILDER}" -eq 0 && "${DOCKER_SOCK}" -eq 0 && "${EGRESS_MODE}" != "none" ]]; then
+    local builder
+    builder="$(start_builder)"
+    RUN_ARGS+=(-e "BUILDX_BUILDER=${builder}")
+  fi
+
+  local shell_bin="/usr/bin/${SHELL_NAME}"
+  log "Profile   : ${PROFILE}"
+  log "Image     : ${IMAGE}"
+  log "Container : ${NAME}"
+  log "Work      : ${WORK_DIR} -> /work"
+
+  if [[ "${DETACH}" -eq 1 ]]; then
+    docker run -d "${RUN_ARGS[@]}" "${IMAGE}" "${shell_bin}" -l >/dev/null
+    echo "${NAME}"
+  else
+    docker run -it "${RUN_ARGS[@]}" "${IMAGE}" "${shell_bin}" -l
+  fi
+}
+
+# --- main ---
+SUBCOMMAND="start"
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    attach|down|agent|start) SUBCOMMAND="$1"; shift ;;
+  esac
+fi
+
+EXTRA_AGENT_ARGS=()
+parse_args "$@"
+WORK_DIR_ENV="${WORK_DIR:-}"
+
+case "${SUBCOMMAND}" in
+  down)
+    NAME="${NAME:-${WORK_DIR:+$(default_name_for "${WORK_DIR}")}}"
+    NAME="${NAME:-${1:-}}"
+    cmd_down "${NAME}"
+    ;;
+  attach)
+    NAME="${NAME:-${1:-}}"
+    cmd_attach "${NAME}"
+    ;;
+  agent)
+    # Start sealed (or chosen) container detached if needed, then run agent
+    DETACH=1
+    cmd_start
+    docker exec -it "${NAME}" run-agent "${EXTRA_AGENT_ARGS[@]}"
+    ;;
+  start)
+    cmd_start
+    ;;
+  *)
+    die "unknown command: ${SUBCOMMAND}"
+    ;;
+esac

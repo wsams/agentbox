@@ -1,0 +1,23 @@
+[init]
+	defaultBranch = main
+[fetch]
+	prune = true
+[pull]
+	rebase = false
+[push]
+	autoSetupRemote = true
+[core]
+	pager = delta
+	editor = vim
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	line-numbers = true
+[alias]
+	s = status -sb
+	co = checkout
+	br = branch
+	ci = commit
+	lg = log --oneline --graph --decorate -20
+# [user] name / email are set by the entrypoint from forwarded host identity

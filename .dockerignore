@@ -1,0 +1,17 @@
+.git
+.github
+skills/repos
+**/__pycache__
+wizard
+wizard.py
+capsule
+build.sh
+Makefile
+.gitignore
+.dockerignore
+*.zip
+.env
+.env.*
+README.md
+AGENTS.md
+CHANGELOG.md

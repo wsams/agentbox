@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# In-container wizard: install AI agent CLIs (and related tasks).
+set -euo pipefail
+ROOT=/usr/local/lib/agentbox
+export WIZARD_CATALOG="${WIZARD_CATALOG:-${ROOT}/wizard/catalog.json}"
+cd "${ROOT}"
+exec python3 "${ROOT}/wizard/wizard.py" "$@"
