@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/wsams/safe-ai-container/compare/v1.0.1...v1.1.0) (2026-11-11)
+
+### Features
+
+* **image:** lazy-install wrappers for agent CLIs on first run ([52f432a](https://github.com/wsams/safe-ai-container/commit/52f432ab8ded472d7b4d6e463baf1c7f8a2ac871))
+
 ## [1.0.1](https://github.com/wsams/safe-ai-container/compare/v1.0.0...v1.0.1) (2026-11-11)
 
 ### Bug Fixes
