@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/wsams/agentbox/compare/v1.1.1...v1.2.0) (2026-11-11)
+
+### Features
+
+* add OSS devops groups, vault wrapper, and group wizard installs ([a5004c6](https://github.com/wsams/agentbox/commit/a5004c67ded14cd160aba50fc1b55d2129e5b610))
+
 ## [1.1.1](https://github.com/wsams/safe-ai-container/compare/v1.1.0...v1.1.1) (2026-11-11)
 
 ### Bug Fixes
