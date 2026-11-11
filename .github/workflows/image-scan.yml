@@ -1,0 +1,216 @@
+name: Scan published images
+
+# Nightly rescan for newly disclosed CVEs, plus a pass after Hub pushes.
+# Opens deduped GitHub issues for HIGH/CRITICAL findings (fix at convenience).
+# Does not fail the job on vulnerabilities.
+
+on:
+  schedule:
+    - cron: "17 7 * * *" # daily 07:17 UTC
+  workflow_run:
+    workflows: ["Build and push agentbox flavors"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  scan:
+    if: >
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: wsams/agentbox:core
+          - image: wsams/agentbox:k8s
+          - image: wsams/agentbox:terraform
+          - image: wsams/agentbox:pulumi
+          - image: wsams/agentbox:full
+            free_disk: true
+          - image: wsams/agentbox-proxy:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        if: matrix.free_disk
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/.ghcup
+          sudo docker system prune -af || true
+
+      - name: Sanitize artifact name
+        id: meta
+        run: |
+          safe="$(echo '${{ matrix.image }}' | tr '/:' '--')"
+          echo "artifact=trivy-${safe}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: json
+          output: trivy.json
+          exit-code: "0"
+          trivyignores: .trivyignore
+        env:
+          # Avoid GHCR pull-rate limits on the vulnerability DB.
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+
+      - name: Attach image metadata to report
+        run: |
+          set -euo pipefail
+          jq --arg image "${{ matrix.image }}" \
+            '. + {AgentboxImage: $image}' trivy.json > trivy.meta.json
+          mv trivy.meta.json trivy.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: trivy.json
+          retention-days: 30
+
+  report:
+    needs: scan
+    if: always() && needs.scan.result != 'cancelled' && needs.scan.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: reports
+          pattern: trivy-*
+          merge-multiple: false
+
+      - name: Ensure labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh label create security --color d73a4a --description "Security-related" 2>/dev/null || true
+          gh label create trivy --color 1d76db --description "Opened by published-image Trivy scan" 2>/dev/null || true
+
+      - name: Open issues for new HIGH/CRITICAL CVEs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find reports -type f -name 'trivy.json' | sort)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No Trivy reports downloaded; nothing to file."
+            exit 0
+          fi
+
+          # Flatten HIGH/CRITICAL vulns across images, then group by CVE id.
+          flat="$(mktemp)"
+          merged="$(mktemp)"
+          : >"${flat}"
+          for f in "${files[@]}"; do
+            jq -c '
+              .AgentboxImage as $image
+              | (.Results // [])[]
+              | (.Vulnerabilities // [])[]
+              | select(.Severity == "HIGH" or .Severity == "CRITICAL")
+              | select(.VulnerabilityID != null)
+              | {
+                  id: .VulnerabilityID,
+                  severity: .Severity,
+                  title: (.Title // .Description // ""),
+                  primary_url: (.PrimaryURL // ""),
+                  image: $image,
+                  pkg: .PkgName,
+                  installed: .InstalledVersion,
+                  fixed: (.FixedVersion // "")
+                }
+            ' "${f}" >>"${flat}"
+          done
+
+          if [[ ! -s "${flat}" ]]; then
+            echo "Clean — no HIGH/CRITICAL findings with the current filters."
+            exit 0
+          fi
+
+          jq -s '
+            group_by(.id)
+            | map({
+                id: .[0].id,
+                severity: (if any(.severity == "CRITICAL") then "CRITICAL" else "HIGH" end),
+                title: .[0].title,
+                primary_url: .[0].primary_url,
+                findings: (map({image, pkg, installed, fixed, severity})
+                           | unique_by([.image, .pkg, .installed, .fixed]))
+              })
+            | sort_by(.severity, .id)
+          ' "${flat}" >"${merged}"
+
+          count="$(jq 'length' "${merged}")"
+          echo "Unique HIGH/CRITICAL CVEs with fixes available: ${count}"
+
+          date_utc="$(date -u +%Y-%m-%d)"
+          while IFS= read -r cve; do
+            [[ -n "${cve}" ]] || continue
+            existing="$(gh issue list --state open --search "\"[trivy] ${cve}\" in:title" \
+              --json number --jq '.[0].number // empty' || true)"
+            if [[ -n "${existing}" ]]; then
+              echo "skip: ${cve} already tracked in #${existing}"
+              continue
+            fi
+
+            severity="$(jq -r --arg id "${cve}" '.[] | select(.id == $id) | .severity' "${merged}")"
+            title_txt="$(jq -r --arg id "${cve}" '.[] | select(.id == $id) | .title' "${merged}" | head -c 160)"
+            primary="$(jq -r --arg id "${cve}" '.[] | select(.id == $id) | .primary_url' "${merged}")"
+            table="$(jq -r --arg id "${cve}" '
+              .[] | select(.id == $id) | .findings[]
+              | "| `\(.image)` | `\(.pkg)` | `\(.installed)` | \(if .fixed == "" then "—" else "`\(.fixed)`" end) | \(.severity) |"
+            ' "${merged}")"
+
+            {
+              echo "Trivy found **${severity}** vulnerability \`${cve}\` in published agentbox images (${date_utc})."
+              echo
+              if [[ -n "${title_txt}" ]]; then
+                echo "${title_txt}"
+                echo
+              fi
+              if [[ -n "${primary}" ]]; then
+                echo "Details: ${primary}"
+                echo
+              fi
+              echo "| Image | Package | Installed | Fixed in | Severity |"
+              echo "| --- | --- | --- | --- | --- |"
+              echo "${table}"
+              echo
+              echo "- Scan workflow: \`.github/workflows/image-scan.yml\`"
+              echo "- Run: ${RUN_URL}"
+              echo
+              echo "### Handling"
+              echo "- Prefer upgrading the package/base layer, then rebuild/push the affected flavor(s)."
+              echo "- To suppress a finding (accepted risk / false positive), add the CVE to \`.trivyignore\` with a short reason and link this issue."
+            } >issue-body.md
+
+            gh issue create \
+              --title "[trivy] ${cve} (${severity})" \
+              --label security \
+              --label trivy \
+              --body-file issue-body.md
+            echo "opened issue for ${cve}"
+          done < <(jq -r '.[].id' "${merged}")

@@ -1,0 +1,5 @@
+# Suppressions for published-image scans (.github/workflows/image-scan.yml).
+# One CVE / vulnerability ID per line. Prefer a short reason + issue link.
+#
+# Example:
+# CVE-2024-12345  # accepted until upstream base image ships fix (#42)

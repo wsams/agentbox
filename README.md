@@ -117,6 +117,7 @@ run-agent
 ## GitHub Actions
 
 - **build-push** — flavor matrix → Docker Hub (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`)
+- **image-scan** — Trivy on published Hub tags (nightly + after successful Hub pushes); opens deduped `security`/`trivy` issues for HIGH/CRITICAL findings with available fixes. Suppress via [`.trivyignore`](.trivyignore).
 - **Renovate** — nightly + dispatch (`RENOVATE_TOKEN`, enable auto-merge)
 - **semantic-release** — on `main` (`GITHUB_TOKEN`; Conventional Commits)
 
