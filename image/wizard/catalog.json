@@ -7,8 +7,12 @@
   },
   "briefing": [
     {
-      "title": "Why install here?",
-      "body": "Vendor agent binaries (Cursor, Claude Code, Copilot, Grok, and others) are downloaded by you under each vendor's terms. The Hub image only ships the installers and this wizard."
+      "title": "Lazy wrappers",
+      "body": "You can also just run agent, claude, copilot, grok, gemini, codex, or opencode — each wrapper installs on first use. This wizard is the explicit menu for the same installers."
+    },
+    {
+      "title": "Why not baked in?",
+      "body": "Vendor agent binaries are downloaded by you under each vendor's terms. The Hub image only ships wrappers, installers, and this wizard."
     },
     {
       "title": "Persistence",

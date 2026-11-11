@@ -84,9 +84,11 @@ COPY skills/build /tmp/skills-build
 RUN SKILLS_SRC=/tmp/skills-build /tmp/modules/95-skills.sh \
  && rm -rf /tmp/modules /tmp/skills-build
 
-# In-container agent installer wizard + scripts (no proprietary CLIs bundled)
+# In-container agent installer wizard + lazy wrappers (no proprietary CLIs bundled)
+COPY image/lib /usr/local/lib/agentbox/lib
 COPY image/installers /usr/local/lib/agentbox/installers
 COPY image/wizard /usr/local/lib/agentbox/wizard
+COPY image/wrappers /usr/local/lib/agentbox/wrappers
 COPY image/AGENTBOX.md /usr/local/lib/agentbox/AGENTBOX.md
 COPY image/AGENTBOX.md /etc/agentbox/AGENTBOX.md
 COPY image/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -94,7 +96,11 @@ COPY image/gitconfig /home/agent/.gitconfig
 COPY image/bin/wizard /usr/local/bin/wizard
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/wizard \
       /usr/local/lib/agentbox/installers/*.sh \
+      /usr/local/lib/agentbox/wrappers/* \
       /usr/local/lib/agentbox/wizard/wizard.py \
+ && for cmd in agent cursor-agent claude copilot grok gemini codex opencode; do \
+      ln -sfn "/usr/local/lib/agentbox/wrappers/${cmd}" "/usr/local/bin/${cmd}"; \
+    done \
  && chown -R agent:agent /home/agent \
  && mkdir -p /etc/agentbox
 

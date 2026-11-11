@@ -285,9 +285,9 @@
       "surface": ["cli"],
       "steps": [
         "Start a capsule: ./capsule ~/your/project",
-        "Inside the container run: wizard",
-        "Pick an agent installer (or wizard --list). Each download is subject to that vendor's terms.",
-        "Then run the agent CLI, or: run-agent"
+        "Inside the container run agent (or claude, copilot, grok, …) — wrappers install on first use",
+        "Or run wizard for an explicit installer menu (wizard --list)",
+        "Each download is subject to that vendor's terms"
       ]
     },
     {

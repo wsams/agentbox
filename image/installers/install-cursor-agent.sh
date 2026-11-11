@@ -7,13 +7,10 @@ echo "Installing Cursor agent (downloads from downloads.cursor.com)…"
 echo "Subject to Cursor Terms of Service: https://cursor.com/terms-of-service"
 curl -fsSL https://cursor.com/install | bash
 
-# Ensure common PATH locations
-export PATH="${HOME}/.local/bin:${PATH}"
-if command -v agent >/dev/null 2>&1 || command -v cursor-agent >/dev/null 2>&1; then
-  echo "Installed. Try: agent   (or: cursor-agent)"
+if [[ -x "${HOME}/.local/bin/agent" || -x "${HOME}/.local/bin/cursor-agent" ]]; then
+  echo "Installed under ~/.local/bin. Try: agent"
   echo "Auth: run agent once to sign in, or export CURSOR_API_KEY"
 else
-  echo "Installer finished but 'agent' is not on PATH yet."
-  echo "Add ~/.local/bin to PATH and reopen the shell."
+  echo "Installer finished but ~/.local/bin/agent was not found." >&2
   exit 1
 fi

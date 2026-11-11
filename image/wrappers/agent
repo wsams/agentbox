@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# shellcheck source=/usr/local/lib/agentbox/lib/lazy-run.sh
+source /usr/local/lib/agentbox/lib/lazy-run.sh
+agentbox_lazy_run "$0" \
+  /usr/local/lib/agentbox/installers/install-cursor-agent.sh \
+  agent cursor-agent -- "$@"

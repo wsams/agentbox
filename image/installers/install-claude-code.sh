@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Install Anthropic Claude Code CLI via npm (operator download, not baked into the image).
 set -euo pipefail
 
 export npm_config_prefix="${HOME}/.npm-global"
@@ -10,5 +9,10 @@ echo "Installing Claude Code (@anthropic-ai/claude-code)…"
 echo "Subject to Anthropic's terms for Claude Code."
 npm install -g @anthropic-ai/claude-code
 
-echo "Installed. Try: claude"
-echo "Auth: claude auth login   or set ANTHROPIC_API_KEY"
+if [[ -x "${HOME}/.npm-global/bin/claude" ]]; then
+  echo "Installed. Try: claude"
+  echo "Auth: claude auth login   or set ANTHROPIC_API_KEY"
+else
+  echo "Install finished but ~/.npm-global/bin/claude was not found." >&2
+  exit 1
+fi

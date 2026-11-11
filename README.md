@@ -11,14 +11,16 @@ Published images: [`wsams/agentbox`](https://hub.docker.com/r/wsams/agentbox).
 | Where | Command | Purpose |
 |---|---|---|
 | **Host** (this repo) | `./wizard.py` | Build flavors, start/stop capsules, trigger Renovate, … |
-| **Inside the container** | `wizard` | Install AI agent CLIs into that container |
+| **Inside the container** | `wizard` | Explicit menu to install AI agent CLIs |
 
 ```bash
 ./wizard.py                 # project operator wizard
 ./capsule ~/projects/myrepo
 # inside:
-wizard                      # install Cursor / Claude / Copilot / Grok / …
-run-agent                   # AGENT_CMD, or first agent found on PATH
+agent                       # wrapper: installs Cursor agent on first use
+claude                      # same pattern for Claude Code (also copilot, grok, …)
+wizard                      # or install explicitly from the menu
+run-agent                   # AGENT_CMD, else agent
 ```
 
 ## Flavors

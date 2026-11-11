@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source /usr/local/lib/agentbox/lib/lazy-run.sh
+agentbox_lazy_run "$0" \
+  /usr/local/lib/agentbox/installers/install-copilot-cli.sh \
+  copilot -- "$@"
