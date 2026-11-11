@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/wsams/agentbox/compare/v1.2.0...v1.2.1) (2026-11-11)
+
+### Bug Fixes
+
+* **ci:** free runner disk before full flavor build ([0642715](https://github.com/wsams/agentbox/commit/064271556f41978fcb0a1e984fbb285dac072ad6))
+
 ## [1.2.0](https://github.com/wsams/agentbox/compare/v1.1.1...v1.2.0) (2026-11-11)
 
 ### Features
