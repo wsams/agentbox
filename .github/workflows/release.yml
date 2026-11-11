@@ -26,12 +26,15 @@ jobs:
 
       - name: Install semantic-release
         run: |
+          # Pin conventional-changelog-conventionalcommits to v9: v10 needs
+          # conventional-changelog-writer@9, which current semantic-release still
+          # bundles as v8, and generateNotes fails with Missing helper.
           npm install --no-save \
-            semantic-release \
-            @semantic-release/changelog \
-            @semantic-release/git \
-            @semantic-release/github \
-            conventional-changelog-conventionalcommits
+            semantic-release@24 \
+            @semantic-release/changelog@6 \
+            @semantic-release/git@10 \
+            @semantic-release/github@11 \
+            conventional-changelog-conventionalcommits@9
 
       - name: Release
         env:
