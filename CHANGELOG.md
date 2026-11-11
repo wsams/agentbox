@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/wsams/agentbox/compare/v1.2.1...v1.3.0) (2026-11-11)
+
+### Features
+
+* **ci:** scan published images nightly and after Hub pushes ([4ffb992](https://github.com/wsams/agentbox/commit/4ffb992a01845adf1e512c14d765b9d5486c7b73))
+
 ## [1.2.1](https://github.com/wsams/agentbox/compare/v1.2.0...v1.2.1) (2026-11-11)
 
 ### Bug Fixes
