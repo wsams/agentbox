@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.29
 # agentbox — modular devops toolbox. Proprietary / non-OSI CLIs install at runtime.
 # Feature groups are toggled with WITH_* build args (0|1). Prefer build.sh.
 
