@@ -18,7 +18,7 @@ jobs:
       matrix:
         flavor: [core, k8s, terraform, pulumi, full]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # full installs every feature group; layers + final image exceed the
       # default runner free space unless we drop preinstalled toolchains first.
@@ -67,7 +67,7 @@ jobs:
   proxy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
