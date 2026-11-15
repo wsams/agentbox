@@ -36,7 +36,7 @@ jobs:
             free_disk: true
           - image: wsams/agentbox-proxy:latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Free runner disk space
         if: matrix.free_disk
@@ -93,7 +93,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v4
         with:
